@@ -2,6 +2,7 @@ import re
 from collections import UserDict
 from datetime import datetime, timedelta
 
+
 def input_error(func):
     def wrapper(*args, **kwargs):
         try:
@@ -21,6 +22,7 @@ def parse_input(user_input):
     args = parts[1:]
     return command, args
 
+
 class Field:
     # Base class for fields like Name and Phone
     def __init__(self, value):
@@ -29,10 +31,12 @@ class Field:
     def __str__(self):
         return str(self.value)
 
+
 class Name(Field):
     # Represents a contact name
     def __init__(self, value):
         super().__init__(value)
+
 
 class Phone(Field):
     # Represents a phone number
@@ -52,10 +56,11 @@ class Phone(Field):
     def __hash__(self):
         # Now are able to be added in lists
         return hash(self.value)
-    
+
 
 class Birthday(Field):
     BD_PATTERN = re.compile(r'^\d{2}\.\d{2}\.\d{4}$')
+
     def __init__(self, value):
         if not re.match(self.BD_PATTERN, value):
             raise ValueError("Invalid date format. Use DD.MM.YYYY")
@@ -80,7 +85,7 @@ class Record:
             self.phones.append(phone_obj)
         else:
             raise ValueError('This phone number already exists')
-        
+
     def add_birthday(self, birthday):
         self.birthday = Birthday(birthday)
 
@@ -100,7 +105,6 @@ class Record:
         phone_new = Phone(new)
         idx = self.phones.index(phone_old)
         self.phones[idx] = phone_new
-        
 
     def delete_phone(self, phone):
         # Deletes a phone number from the record
@@ -109,8 +113,9 @@ class Record:
 
     def __str__(self):
         # Returns formatted string representation of the record
-        return f"Contact name: {self.name.value}, phones: {'; '.join(p.value for p in self.phones)}"
-    
+        return f"Contact name: {self.name.value}, \
+            phones: {'; '.join(p.value for p in self.phones)}"
+
 
 class AddressBook(UserDict):
     def add_record(self, record):
@@ -118,38 +123,42 @@ class AddressBook(UserDict):
         self.data[record.name.value] = record
 
     def get_upcoming_birthdays(self):
-    # Initiate an empty output array
+        # Initiate an empty output array
         birthday_users = []
 
         # Loop through users
         for record in self.data.values():
 
-            # Concatenate this or next year with string pattern DD.MM to get 2 possible birthdays
+            # Concatenate this or next year
+            # with string pattern DD.MM to get 2 possible birthdays
             birthday = record.birthday.value.strftime("%d.%m.%Y")
             ddmm = '.'.join(birthday.split('.')[:-1])
             this_year = datetime.today().year
             next_year = this_year + 1
 
-            # For each year loop through and calculate difference in days 
+            # For each year loop through and calculate difference in days
             for year in [this_year, next_year]:
                 birthday = f'{ddmm}.{year}'
                 birthday_dt = datetime.strptime(birthday, '%d.%m.%Y').date()
                 days_diff = (birthday_dt - datetime.today().date()).days
 
-                # In case difference between 0 and 7, inclusively. 
-                # Return congratulation date as birthday itself in case it happens Monday through Friday, otherwise, move to the next Monday
+                # In case difference between 0 and 7, inclusively.
+                # Return congratulation date as birthday itself.
+                # In case it happens Monday through Friday.
+                # Otherwise, move to the next Monday
                 if 0 <= days_diff <= 7:
                     if 0 <= birthday_dt.weekday() <= 4:
-                        birthday_users.append({'name': record.name.value, 
+                        birthday_users.append({'name': record.name.value,
                                                'congratulation_date': birthday})
                     else:
-                        birthday_users.append({'name': record.name.value, 
-                                               'congratulation_date': datetime.strftime(birthday_dt + timedelta(days=7-birthday_dt.weekday()), '%d.%m.%Y')})
+                        birthday_users.append({'name': record.name.value,
+                         'congratulation_date': datetime.strftime(birthday_dt +
+                                                                  timedelta(days=7-birthday_dt.weekday()),
+                                                                  '%d.%m.%Y')})
         return birthday_users
 
     def find(self, name):
         # Finds a record by name
-        # print(self.data.values())
         return self.data.get(name)
 
     def delete(self, name):
@@ -173,6 +182,7 @@ def add_contact(args, book):
     record.add_phone(phone)
     return message
 
+
 @input_error
 def change_contact(args, book):
     name, phone_old, phone_new = args
@@ -184,7 +194,8 @@ def change_contact(args, book):
         message = 'Contact updated'
     return message
 
-@input_error   
+
+@input_error
 def delete_contact(args, book):
     name = args[0]
     record = book.find(name)
@@ -202,6 +213,7 @@ def show_phone(args, book):
         raise ValueError('No contact found')
     return ('; '.join(p.value for p in record.phones)).strip()
 
+
 @input_error
 def show_all(book):
     output = []
@@ -210,18 +222,19 @@ def show_all(book):
             output.append(str(record))
         return '\n'.join(output)
     return 'No contacts found'
-    
+
+
 @input_error
 def delete_phone(args, book):
     name, phone = args
     record = book.find(name)
     if not record:
         raise ValueError('No contact found')
-    # print(record.phones)
     if phone not in [p.value for p in record.phones]:
         raise ValueError('No such phone number in contact')
     record.delete_phone(phone)
     return 'Phone deleted'
+
 
 @input_error
 def add_birthday(args, book):
@@ -234,6 +247,7 @@ def add_birthday(args, book):
     record.add_birthday(birthday)
     return 'Birthday added'
 
+
 @input_error
 def show_birthday(args, book):
     name = args[0]
@@ -244,10 +258,12 @@ def show_birthday(args, book):
         raise ValueError('No birthday found')
     return record.birthday.value.strftime("%d.%m.%Y")
 
+
 @input_error
 def birthdays(book):
     result = book.get_upcoming_birthdays()
-    return '\n'.join([str(bd_user) for bd_user in result]) if result else 'No upcoming birthdays available'
+    return ('\n'.join([str(bd_user) for bd_user in result])
+            if result else 'No upcoming birthdays available')
 
 
 def main():
