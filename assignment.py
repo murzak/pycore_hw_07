@@ -8,16 +8,31 @@ def input_error(func):
         try:
             return func(*args, **kwargs)
         except ValueError as e:
+            if 'not enough values to unpack' in str(e).lower() or 'too many values to unpack' in str(e).lower():
+                if args[0] in ['add', 'delete-phone']:
+                    return f'Please provide both name and phone number. Example <{args[0]} John 0501234567>'
+                elif args[0] in ['delete', 'phone', 'show-birthday']:
+                    return f'Please provede name. Example <{args[0]} John>'
+                elif args[0] == 'change':
+                    return f'Please provide name phone_old and phone_new. Example <{args[0]} John 0501234567 0991234567>'
+                elif args[0] == 'add-birthday':
+                    return f'Please provide both name and birthday. Example: <{args[0]} John 09.11.2000>'
             return str(e)
         except IndexError:
             return 'Not enough arguments'
         except KeyError:
             return 'Contact not found'
+        except AttributeError:
+            if args[0] == 'show-birthday':
+                return 'No birthday found'
+            return 'No contact found'
     return wrapper
 
 
 def parse_input(user_input):
     parts = user_input.strip().split()
+    if not parts:
+        return None, []
     command = parts[0].lower()
     args = parts[1:]
     return command, args
@@ -26,7 +41,7 @@ def parse_input(user_input):
 class Field:
     # Base class for fields like Name and Phone
     def __init__(self, value):
-        self.value = value
+        self.value = value.strip()
 
     def __str__(self):
         return str(self.value)
@@ -113,8 +128,9 @@ class Record:
 
     def __str__(self):
         # Returns formatted string representation of the record
-        return f"Contact name: {self.name.value}, \
-            phones: {'; '.join(p.value for p in self.phones)}"
+        phones_message = '; '.join(p.value for p in self.phones) if self.phones else 'No phone provided'
+        bd_message = self.birthday.value.strftime('%d.%m.%Y') if self.birthday else 'Birthday not provided'
+        return f"Contact name: {self.name.value}, phones: {phones_message}, birthday: {bd_message}"
 
 
 class AddressBook(UserDict):
@@ -131,6 +147,9 @@ class AddressBook(UserDict):
 
             # Concatenate this or next year
             # with string pattern DD.MM to get 2 possible birthdays
+            if not record.birthday:
+                continue
+
             birthday = record.birthday.value.strftime("%d.%m.%Y")
             ddmm = '.'.join(birthday.split('.')[:-1])
             this_year = datetime.today().year
@@ -149,12 +168,12 @@ class AddressBook(UserDict):
                 if 0 <= days_diff <= 7:
                     if 0 <= birthday_dt.weekday() <= 4:
                         birthday_users.append({'name': record.name.value,
-                                               'congratulation_date': birthday})
+                        'congratulation_date': birthday})
                     else:
                         birthday_users.append({'name': record.name.value,
-                         'congratulation_date': datetime.strftime(birthday_dt +
-                                                                  timedelta(days=7-birthday_dt.weekday()),
-                                                                  '%d.%m.%Y')})
+                        'congratulation_date': datetime.strftime(birthday_dt +
+                                                                timedelta(days=7-birthday_dt.weekday()),
+                                                                '%d.%m.%Y')})
         return birthday_users
 
     def find(self, name):
@@ -168,9 +187,17 @@ class AddressBook(UserDict):
         else:
             raise ValueError('This name does not exist in this address book')
 
+    def __str__(self):
+        output = []
+        if self.data.values():
+            for record in self.data.values():
+                output.append(str(record))
+            return '\n'.join(output)
+        return 'No contacts found'
+
 
 @input_error
-def add_contact(args, book):
+def add_contact(command, args, book):
     name, phone = args
     record = book.find(name)
     if not record:
@@ -184,52 +211,42 @@ def add_contact(args, book):
 
 
 @input_error
-def change_contact(args, book):
+def change_contact(command, args, book):
     name, phone_old, phone_new = args
     record = book.find(name)
-    if not record:
-        raise ValueError('No contact found')
-    else:
-        record.edit_phone(phone_old, phone_new)
-        message = 'Contact updated'
+    record.edit_phone(phone_old, phone_new)
+    message = 'Contact updated'
     return message
 
 
 @input_error
-def delete_contact(args, book):
-    name = args[0]
+def delete_contact(command, args, book):
+    name, = args
     record = book.find(name)
-    if not record:
-        raise ValueError('No contact found')
     book.delete(name)
     return 'Contact deleted'
 
 
 @input_error
-def show_phone(args, book):
-    name = args[0]
+def show_phone(command, args, book):
+    name, = args
     record = book.find(name)
-    if not record:
-        raise ValueError('No contact found')
+    if not record.phones:
+        return 'No phone provided'
     return ('; '.join(p.value for p in record.phones)).strip()
 
 
 @input_error
-def show_all(book):
-    output = []
-    if book.data.values():
-        for record in book.data.values():
-            output.append(str(record))
-        return '\n'.join(output)
-    return 'No contacts found'
+def show_all(command, args, book):
+    if args:
+        raise ValueError(f'Please do not provide anything else but comand. Example <{args[0]}>')
+    return str(book)
 
 
 @input_error
-def delete_phone(args, book):
+def delete_phone(command, args, book):
     name, phone = args
     record = book.find(name)
-    if not record:
-        raise ValueError('No contact found')
     if phone not in [p.value for p in record.phones]:
         raise ValueError('No such phone number in contact')
     record.delete_phone(phone)
@@ -237,11 +254,9 @@ def delete_phone(args, book):
 
 
 @input_error
-def add_birthday(args, book):
+def add_birthday(command, args, book):
     name, birthday = args
     record = book.find(name)
-    if not record:
-        raise ValueError('No contact found')
     if record.birthday:
         raise ValueError('Birthday already given')
     record.add_birthday(birthday)
@@ -249,21 +264,18 @@ def add_birthday(args, book):
 
 
 @input_error
-def show_birthday(args, book):
-    name = args[0]
+def show_birthday(command, args, book):
+    name, = args
     record = book.find(name)
-    if not record:
-        raise ValueError('No contact found')
-    if record and not record.birthday:
-        raise ValueError('No birthday found')
     return record.birthday.value.strftime("%d.%m.%Y")
 
 
 @input_error
-def birthdays(book):
+def birthdays(command, args, book):
+    if args:
+        raise ValueError(f'Please do not provide anything else but comand. Example <{args[0]}>')
     result = book.get_upcoming_birthdays()
-    return ('\n'.join([str(bd_user) for bd_user in result])
-            if result else 'No upcoming birthdays available')
+    return ('\n'.join([str(bd_user) for bd_user in result])) if result else 'No upcoming birthdays'
 
 
 def main():
@@ -272,6 +284,8 @@ def main():
     while True:
         user_input = input("Enter a command: ")
         command, args = parse_input(user_input)
+        if not command:
+            continue
 
         if command in ["close", "exit"]:
             print("Good bye!")
@@ -281,31 +295,31 @@ def main():
             print("How can I help you?")
 
         elif command == "add":
-            print(add_contact(args, book))
+            print(add_contact(command, args, book))
 
         elif command == "change":
-            print(change_contact(args, book))
+            print(change_contact(command, args, book))
 
         elif command == 'delete':
-            print(delete_contact(args, book))
+            print(delete_contact(command, args, book))
 
         elif command == "phone":
-            print(show_phone(args, book))
+            print(show_phone(command, args, book))
 
         elif command == 'delete-phone':
-            print(delete_phone(args, book))
+            print(delete_phone(command, args, book))
 
         elif command == "all":
-            print(show_all(book))
+            print(show_all(command, args, book))
 
         elif command == "add-birthday":
-            print(add_birthday(args, book))
+            print(add_birthday(command, args, book))
 
         elif command == "show-birthday":
-            print(show_birthday(args, book))
+            print(show_birthday(command, args, book))
 
         elif command == "birthdays":
-            print(birthdays(book))
+            print(birthdays(command, args, book))
 
         else:
             print("Invalid command.")
